@@ -35,6 +35,41 @@ body.bg-snow .label, body.bg-snow .sub, body.bg-snow .day-lo, body.bg-snow .day-
 @keyframes fall { 0% { transform: translateY(-100px); } 100% { transform: translateY(100vh); } }
 @keyframes snowfall { 0% { transform: translateY(-50px) translateX(0); } 100% { transform: translateY(100vh) translateX(40px); } }
 
+/* Blocky Roblox-style voxel world background (original art) */
+.voxel-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; perspective: 800px; }
+.voxel {
+  position: absolute;
+  transform-style: preserve-3d;
+  animation: voxelFloat linear infinite;
+  opacity: 0.55;
+}
+.voxel .face { position: absolute; width: 100%; height: 100%; }
+.voxel .top   { transform: rotateX(90deg) translateZ(var(--half)); filter: brightness(1.25); }
+.voxel .front { transform: translateZ(var(--half)); }
+.voxel .side  { transform: rotateY(90deg) translateZ(var(--half)); filter: brightness(0.7); }
+@keyframes voxelFloat {
+  0%   { transform: translateY(110vh) rotateX(35deg) rotateY(0deg); }
+  100% { transform: translateY(-30vh) rotateX(35deg) rotateY(360deg); }
+}
+
+/* Original blocky voxel characters standing along the bottom */
+.char-row { position: fixed; bottom: 0; left: 0; right: 0; z-index: 0; pointer-events: none;
+  display: flex; justify-content: space-around; align-items: flex-end; padding: 0 4%; opacity: 0.85; }
+.blocky { position: relative; width: 54px; animation: bob 2.6s ease-in-out infinite; }
+.blocky .head  { width: 36px; height: 32px; margin: 0 auto; border-radius: 3px; position: relative; }
+.blocky .face-dot { position: absolute; width: 5px; height: 6px; background: #1a1a1a; top: 12px; border-radius: 1px; }
+.blocky .eye-l { left: 8px; } .blocky .eye-r { right: 8px; }
+.blocky .torso { width: 44px; height: 30px; margin: 2px auto 0; border-radius: 3px; }
+.blocky .legs  { display: flex; gap: 4px; justify-content: center; margin-top: 1px; }
+.blocky .leg   { width: 18px; height: 22px; border-radius: 2px; }
+.blocky .arms  { position: absolute; top: 34px; width: 100%; display: flex; justify-content: space-between; }
+.blocky .arm   { width: 12px; height: 28px; border-radius: 2px; }
+.blocky .hat   { width: 40px; height: 10px; margin: 0 auto -2px; border-radius: 3px 3px 1px 1px; position: relative; z-index: 2; }
+.blocky .brim  { width: 30px; height: 5px; margin: 0 auto; border-radius: 2px; }
+.blocky .glow-eye { box-shadow: 0 0 6px 2px currentColor; }
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@media (max-width: 600px) { .blocky { width: 40px; transform: scale(0.8); } .char-row { padding: 0 2%; } }
+
 .app { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
 
 /* Header & search */
@@ -158,42 +193,72 @@ body.bg-snow .label, body.bg-snow .sub, body.bg-snow .day-lo, body.bg-snow .day-
 @media (max-width: 600px) {
   .temp { font-size: 52px; }
   .hero-icon { font-size: 64px; }
-  .forecast { grid-template-columns: repeat(4, 1fr); }
-  .forecast .day:nth-child(n+5) { display: none; }
+  /* Show all 7 days as a horizontal scroll strip instead of hiding days */
+  .forecast {
+    display: flex;
+    overflow-x: auto;
+    gap: 8px;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 4px;
+  }
+  .forecast .day {
+    flex: 0 0 auto;
+    min-width: 64px;
+    scroll-snap-align: start;
+  }
+  .forecast::-webkit-scrollbar { height: 4px; }
+  .forecast::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 2px; }
+}
+
+/* Tablet: slightly tighter hero, keep 7-day grid */
+@media (min-width: 601px) and (max-width: 820px) {
+  .grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
 }
 </style>
 </head>
 <body>
 
+<div class="voxel-bg" id="voxel-bg" aria-hidden="true"></div>
+<div class="char-row" id="char-row" aria-hidden="true"></div>
 <div class="rain-overlay" id="rain-overlay"></div>
 <div class="snow-overlay" id="snow-overlay"></div>
 
 <div class="app">
   <div class="header">
     <div class="search-box">
-      <input id="search-input" type="text" placeholder="Search city...">
-      <button class="btn" id="search-btn">Search</button>
+      <input id="search-input" type="text" placeholder="Search city..." aria-label="Search for a city">
+      <button class="btn" id="search-btn" aria-label="Search">Search</button>
     </div>
-    <button class="btn btn-icon" id="geo-btn" title="Use my location">📍</button>
-    <button class="btn" id="unit-btn">°C</button>
+    <button class="btn btn-icon" id="geo-btn" title="Use my location" aria-label="Use my location">📍</button>
+    <button class="btn" id="unit-btn" aria-label="Toggle temperature units">°C</button>
+    <button class="btn" id="mode-btn" title="Toggle city average vs center only" aria-label="Toggle city average or center only">🌆 City avg</button>
   </div>
 
   <div class="favs" id="favs"></div>
 
-  <div id="status" class="status">Loading weather...</div>
+  <div id="status" class="status" role="status" aria-live="polite">Loading weather...</div>
 
   <div id="content" class="hidden">
     <div class="hero">
       <div>
         <div class="location" id="loc">—</div>
+        <div class="local-clock" id="local-clock" style="font-size:13px;opacity:0.9;margin:2px 0 6px;letter-spacing:0.5px;">🕐 —</div>
         <div class="temp"><span id="temp">—</span><span id="temp-unit">°</span></div>
+        <div class="temp-spread" id="temp-spread" style="display:none;font-size:12px;opacity:0.8;margin-top:4px;">—</div>
         <div class="condition" id="cond">—</div>
         <div class="sun-times">
           <span>🌅 <span id="sunrise">—</span></span>
           <span>🌇 <span id="sunset">—</span></span>
         </div>
+        <button class="btn" id="points-toggle" style="margin-top:10px;font-size:12px;padding:6px 12px;display:none;">📍 Show sample points</button>
       </div>
       <div class="hero-icon" id="hero-icon">☀️</div>
+    </div>
+
+    <div id="points-panel" class="hidden" style="background:rgba(255,255,255,0.12);border-radius:14px;padding:14px;margin-bottom:14px;">
+      <div style="font-size:12px;opacity:0.85;margin-bottom:8px;">Individual readings the city average is built from:</div>
+      <div id="points-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:8px;"></div>
     </div>
 
     <div class="grid">
@@ -202,21 +267,12 @@ body.bg-snow .label, body.bg-snow .sub, body.bg-snow .day-lo, body.bg-snow .day-
         <div class="val"><span id="feels">—</span><span class="tu">°</span></div>
       </div>
       <div class="card">
-        <div class="label">💨 Wind</div>
-        <div class="val" id="wind">—</div>
-        <div class="sub" id="wind-dir">—</div>
-      </div>
-      <div class="card">
         <div class="label">💧 Humidity</div>
         <div class="val" id="hum">—</div>
       </div>
       <div class="card">
         <div class="label">📊 Pressure</div>
         <div class="val" id="press">—</div>
-      </div>
-      <div class="card">
-        <div class="label">👁 Visibility</div>
-        <div class="val" id="vis">—</div>
       </div>
       <div class="card">
         <div class="label">☀️ UV index</div>
@@ -269,25 +325,47 @@ const weatherCodes = {
   3:  {label:'Overcast',          emoji:'☁️', bg:'overcast',    night:'☁️'},
   45: {label:'Fog',               emoji:'🌫️', bg:'fog'},
   48: {label:'Rime fog',          emoji:'🌫️', bg:'fog'},
-  51: {label:'Light drizzle',     emoji:'🌦️', bg:'rain'},
-  53: {label:'Drizzle',           emoji:'🌦️', bg:'rain'},
-  55: {label:'Heavy drizzle',     emoji:'🌧️', bg:'rain'},
-  61: {label:'Light rain',        emoji:'🌧️', bg:'rain'},
-  63: {label:'Rain',              emoji:'🌧️', bg:'rain'},
-  65: {label:'Heavy rain',        emoji:'🌧️', bg:'storm'},
+  51: {label:'Light drizzle',     emoji:'☁️💧', bg:'rain'},
+  53: {label:'Drizzle',           emoji:'☁️💧', bg:'rain'},
+  55: {label:'Heavy drizzle',     emoji:'🌧️💧', bg:'rain'},
+  61: {label:'Light rain',        emoji:'🌧️💧', bg:'rain'},
+  63: {label:'Rain',              emoji:'🌧️💧', bg:'rain'},
+  65: {label:'Heavy rain',        emoji:'🌧️💦', bg:'storm'},
   71: {label:'Light snow',        emoji:'🌨️', bg:'snow'},
   73: {label:'Snow',              emoji:'❄️', bg:'snow'},
   75: {label:'Heavy snow',        emoji:'❄️', bg:'snow'},
   77: {label:'Snow grains',       emoji:'❄️', bg:'snow'},
-  80: {label:'Rain showers',      emoji:'🌦️', bg:'rain'},
-  81: {label:'Rain showers',      emoji:'🌧️', bg:'rain'},
-  82: {label:'Heavy showers',     emoji:'⛈️', bg:'storm'},
+  80: {label:'Rain showers',      emoji:'🌧️💧', bg:'rain'},
+  81: {label:'Rain showers',      emoji:'🌧️💧', bg:'rain'},
+  82: {label:'Heavy showers',     emoji:'⛈️💦', bg:'storm'},
   85: {label:'Snow showers',      emoji:'🌨️', bg:'snow'},
   86: {label:'Snow showers',      emoji:'❄️', bg:'snow'},
   95: {label:'Thunderstorm',      emoji:'⛈️', bg:'storm'},
   96: {label:'Thunderstorm',      emoji:'⛈️', bg:'storm'},
   99: {label:'Thunderstorm',      emoji:'⛈️', bg:'storm'}
 };
+
+// Open-Meteo's weather_code can report rain or heavy cloud even when neither is real,
+// because it comes straight from the model. We cross-check it against the ACTUAL
+// precipitation (mm) and cloud cover (%).
+// WMO bands: 0-12% clear, 13-50% partly cloudy, 51-87% mostly cloudy, 88%+ overcast.
+// Rain/drizzle/shower codes (51-67, 80-82) are demoted to a cloud code if no rain is falling.
+function reconcileCondition(code, cloudCover, precip) {
+  const rainCodes = [51,53,55,56,57,61,63,65,66,67,80,81,82];
+  // If the model claims rain but precipitation is essentially zero, it's not raining.
+  if (rainCodes.includes(code) && precip != null && !isNaN(precip) && precip < 0.1) {
+    // Fall back to a sky condition based on cloud cover instead of fake rain.
+    code = (cloudCover != null && cloudCover > 50) ? 3 : 2;
+  }
+  // Adjust the "dry sky" codes using real cloud cover.
+  if (![0, 1, 2, 3].includes(code) || cloudCover == null || isNaN(cloudCover)) {
+    return code;
+  }
+  if (cloudCover <= 12) return 0;  // Clear
+  if (cloudCover <= 50) return 2;  // Partly cloudy
+  if (cloudCover <= 87) return 2;  // mostly cloudy — keep cloud icon, not overcast
+  return 3;                        // Overcast
+}
 
 const aqiLevels = [
   {max:50,  label:'Good',                       color:'#2ecc71'},
@@ -301,7 +379,6 @@ const aqiLevels = [
 const uvLabel = uv => uv<3?'Low':uv<6?'Moderate':uv<8?'High':uv<11?'Very high':'Extreme';
 const cToF = c => Math.round(c * 9/5 + 32);
 const showT = c => useF ? cToF(c) : Math.round(c);
-const windDir = deg => ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(deg/22.5)%16];
 
 function isNight(now, sunrise, sunset) {
   const t = new Date(now).getTime();
@@ -356,42 +433,199 @@ async function reverseGeo(lat, lon) {
   return { name: 'My location', latitude: lat, longitude: lon, country: '' };
 }
 
+// "City average" mode samples a 9-point grid across the city; "center only" uses 1 point.
+let avgMode = (localStorage.getItem('weather_avg_mode') || 'city'); // 'city' | 'center'
+
+// Build a grid of sample points spread across the city area.
+// City mode: center + a ring of 8 points (~0.06° ≈ 6-7 km out) covering the whole footprint.
+function buildGrid(lat, lon) {
+  if (avgMode === 'center') return [{ lat, lon }];
+  const d = 0.06;
+  return [
+    { lat: lat,     lon: lon     }, // center
+    { lat: lat + d, lon: lon     }, // N
+    { lat: lat - d, lon: lon     }, // S
+    { lat: lat,     lon: lon + d }, // E
+    { lat: lat,     lon: lon - d }, // W
+    { lat: lat + d, lon: lon + d }, // NE
+    { lat: lat + d, lon: lon - d }, // NW
+    { lat: lat - d, lon: lon + d }, // SE
+    { lat: lat - d, lon: lon - d }  // SW
+  ];
+}
+
+// Open-Meteo accepts comma-separated lat/lon lists and returns an ARRAY of results,
+// one per point — so we average across all of them in a single request.
 async function getWeather(lat, lon) {
-  const wUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,visibility,uv_index&hourly=temperature_2m,weather_code,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto&forecast_days=7`;
-  const aUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone`;
+  const grid = buildGrid(lat, lon);
+  const lats = grid.map(p => p.lat.toFixed(4)).join(',');
+  const lons = grid.map(p => p.lon.toFixed(4)).join(',');
+
+  const wUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,cloud_cover,precipitation,surface_pressure,uv_index&hourly=temperature_2m,weather_code,cloud_cover,precipitation,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum,sunrise,sunset&timezone=auto&forecast_days=7`;
+  const aUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lats}&longitude=${lons}&current=us_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone`;
+
   const [wR, aR] = await Promise.all([fetch(wUrl), fetch(aUrl)]);
-  return { w: await wR.json(), a: await aR.json() };
+  let wData = await wR.json();
+  let aData = await aR.json();
+
+  // When multiple coords are sent, the API returns an array. Normalize to arrays.
+  const wArr = Array.isArray(wData) ? wData : [wData];
+  const aArr = Array.isArray(aData) ? aData : [aData];
+
+  const stationCount = wArr.length;
+
+  // Average the "current" numeric fields across all grid points.
+  const avg = (arr, getter) => {
+    const vals = arr.map(getter).filter(v => v != null && !isNaN(v));
+    return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+  };
+  // Median is robust against one wild outlier point (e.g. a single PM10 spike
+  // dragging the mean up). Used for pollutants where one bad reading shouldn't skew the city value.
+  const median = (arr, getter) => {
+    const vals = arr.map(getter).filter(v => v != null && !isNaN(v)).sort((a,b)=>a-b);
+    if (!vals.length) return null;
+    const mid = Math.floor(vals.length / 2);
+    return vals.length % 2 ? vals[mid] : (vals[mid-1] + vals[mid]) / 2;
+  };
+  // Spread = min and max across points (shows how much the city varies).
+  const spread = (arr, getter) => {
+    const vals = arr.map(getter).filter(v => v != null && !isNaN(v));
+    if (!vals.length) return null;
+    return { min: Math.min(...vals), max: Math.max(...vals) };
+  };
+  // For weather_code, take the most common (mode) across points.
+  const mode = (arr, getter) => {
+    const counts = {};
+    arr.forEach(o => { const v = getter(o); if (v != null) counts[v] = (counts[v] || 0) + 1; });
+    let best = null, bestN = -1;
+    for (const k in counts) if (counts[k] > bestN) { bestN = counts[k]; best = +k; }
+    return best;
+  };
+
+  // Use the center point as the base (for time, hourly, daily, sun times), then overwrite
+  // the current values with the city-wide averages.
+  const base = wArr[0];
+  const mergedWeather = {
+    ...base,
+    current: {
+      time: base.current.time,
+      temperature_2m:      avg(wArr, o => o.current.temperature_2m),
+      relative_humidity_2m:avg(wArr, o => o.current.relative_humidity_2m),
+      apparent_temperature:avg(wArr, o => o.current.apparent_temperature),
+      // Condition reflects the searched location (city center), NOT a vote across
+      // outlying grid points — averaging the sky condition was misleading.
+      weather_code:        base.current.weather_code,
+      cloud_cover:         avg(wArr, o => o.current.cloud_cover),
+      precipitation:       avg(wArr, o => o.current.precipitation),
+      surface_pressure:    avg(wArr, o => o.current.surface_pressure),
+      uv_index:            avg(wArr, o => o.current.uv_index)
+    }
+  };
+
+  // Average air quality across the grid too.
+  const aBase = aArr[0];
+  const mergedAir = {
+    ...aBase,
+    current: {
+      us_aqi:           median(aArr, o => o.current && o.current.us_aqi),
+      pm10:             median(aArr, o => o.current && o.current.pm10),
+      pm2_5:            median(aArr, o => o.current && o.current.pm2_5),
+      carbon_monoxide:  median(aArr, o => o.current && o.current.carbon_monoxide),
+      nitrogen_dioxide: median(aArr, o => o.current && o.current.nitrogen_dioxide),
+      sulphur_dioxide:  median(aArr, o => o.current && o.current.sulphur_dioxide),
+      ozone:            median(aArr, o => o.current && o.current.ozone)
+    }
+  };
+
+  // Per-point breakdown for the expandable detail panel.
+  const labels = ['Center','N','S','E','W','NE','NW','SE','SW'];
+  const points = grid.map((p, i) => ({
+    label: labels[i] || ('P' + (i+1)),
+    lat: p.lat, lon: p.lon,
+    temp: wArr[i] && wArr[i].current ? wArr[i].current.temperature_2m : null,
+    code: wArr[i] && wArr[i].current ? wArr[i].current.weather_code : null,
+    aqi:  aArr[i] && aArr[i].current ? aArr[i].current.us_aqi : null
+  }));
+
+  const tempSpread = spread(wArr, o => o.current.temperature_2m);
+  const aqiSpread  = spread(aArr, o => o.current && o.current.us_aqi);
+
+  return { w: mergedWeather, a: mergedAir, stationCount, points, tempSpread, aqiSpread };
 }
 
 function formatTime(iso) {
   const d = new Date(iso);
-  return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+  return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit', hour12: true});
 }
 
-function render(loc, weather, air) {
-  currentData = { loc, weather, air };
+// Live local clock for the searched city, using the API's UTC offset.
+let clockTimer = null;
+let cityUtcOffsetSec = 0;
+function startCityClock(offsetSeconds) {
+  cityUtcOffsetSec = offsetSeconds || 0;
+  if (clockTimer) clearInterval(clockTimer);
+  const tick = () => {
+    // Date.now() is UTC epoch ms. City wall-clock = UTC + city's offset.
+    // Read with getUTC* so the device's own timezone never enters the calculation.
+    const cityMs = Date.now() + cityUtcOffsetSec * 1000;
+    const d = new Date(cityMs);
+    let h = d.getUTCHours();
+    const m = String(d.getUTCMinutes()).padStart(2, '0');
+    const s = String(d.getUTCSeconds()).padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12; if (h === 0) h = 12;
+    const el = $('local-clock');
+    if (el) el.textContent = `🕐 ${h}:${m}:${s} ${ampm} local time`;
+  };
+  tick();
+  clockTimer = setInterval(tick, 1000);
+}
+
+function render(loc, weather, air, extra) {
+  extra = extra || {};
+  currentData = {
+    loc, weather, air,
+    stationCount: extra.stationCount || (currentData && currentData.stationCount) || 1,
+    points: extra.points || (currentData && currentData.points),
+    tempSpread: extra.tempSpread || (currentData && currentData.tempSpread),
+    aqiSpread: extra.aqiSpread || (currentData && currentData.aqiSpread)
+  };
   const c = weather.current;
-  const code = weatherCodes[c.weather_code] || {label:'Unknown', emoji:'❓'};
+  // Cross-check the model's condition against actual cloud cover to avoid false "cloudy".
+  const effectiveCode = reconcileCondition(c.weather_code, c.cloud_cover, c.precipitation);
+  const code = weatherCodes[effectiveCode] || {label:'Unknown', emoji:'❓'};
   const night = isNight(c.time, weather.daily.sunrise[0], weather.daily.sunset[0]);
 
-  setBackground(c.weather_code, night);
+  setBackground(effectiveCode, night);
 
   const locLabel = loc.name + (loc.admin1 ? ', ' + loc.admin1 : '') + (loc.country ? ', ' + loc.country : '');
-  $('loc').textContent = locLabel;
+  const count = currentData.stationCount || 1;
+  const modeNote = avgMode === 'center'
+    ? ` <span style="opacity:0.7;font-size:11px;">· city center</span>`
+    : (count > 1 ? ` <span style="opacity:0.7;font-size:11px;">· avg of ${count} points across the city</span>` : '');
+  $('loc').innerHTML = locLabel + modeNote;
   $('temp').textContent = showT(c.temperature_2m);
   $('temp-unit').textContent = useF ? '°F' : '°C';
-  $('cond').textContent = code.label;
+  // Temperature spread across the city
+  const ts = currentData.tempSpread;
+  if (avgMode === 'city' && ts && (ts.max - ts.min) >= 0.5) {
+    $('temp-spread').textContent = `ranges ${showT(ts.min)}°–${showT(ts.max)}° across the city`;
+    $('temp-spread').style.display = 'block';
+  } else {
+    $('temp-spread').style.display = 'none';
+  }
+  const cloudPct = (c.cloud_cover != null && !isNaN(c.cloud_cover)) ? Math.round(c.cloud_cover) : null;
+  $('cond').textContent = code.label + (cloudPct != null ? ` · ${cloudPct}% cloud` : '');
   $('hero-icon').textContent = (night && code.night) ? code.night : code.emoji;
   $('sunrise').textContent = formatTime(weather.daily.sunrise[0]);
   $('sunset').textContent = formatTime(weather.daily.sunset[0]);
+  // Live local clock for this city (API provides utc_offset_seconds via timezone=auto)
+  startCityClock(weather.utc_offset_seconds);
 
   $('feels').textContent = showT(c.apparent_temperature);
   document.querySelectorAll('.tu').forEach(el => el.textContent = useF ? '°F' : '°C');
-  $('wind').textContent = Math.round(c.wind_speed_10m) + ' km/h';
-  $('wind-dir').textContent = windDir(c.wind_direction_10m) + ' (' + Math.round(c.wind_direction_10m) + '°)';
   $('hum').textContent = Math.round(c.relative_humidity_2m) + '%';
   $('press').textContent = Math.round(c.surface_pressure) + ' hPa';
-  $('vis').textContent = (c.visibility / 1000).toFixed(1) + ' km';
   $('uv').textContent = Math.round(c.uv_index);
   $('uv-label').textContent = uvLabel(c.uv_index);
 
@@ -402,14 +636,29 @@ function render(loc, weather, air) {
   for (let i = startIdx; i < Math.min(startIdx + 24, weather.hourly.time.length); i++) {
     const t = new Date(weather.hourly.time[i]);
     const isNow = i === startIdx;
-    const hCode = weatherCodes[weather.hourly.weather_code[i]] || {emoji:'❓'};
-    const hourLabel = isNow ? 'Now' : t.toLocaleTimeString([], {hour:'numeric'});
+    // Reconcile the hourly icon. A forecast hour can be tagged drizzle/rain even when
+    // the chance of rain is low — so if probability is under 30%, show clouds, not rain.
+    const rawHCode = weather.hourly.weather_code[i];
+    const hCloud = weather.hourly.cloud_cover ? weather.hourly.cloud_cover[i] : null;
+    const hPrecip = weather.hourly.precipitation != null ? weather.hourly.precipitation[i] : null;
+    const hProb = weather.hourly.precipitation_probability != null ? weather.hourly.precipitation_probability[i] : null;
+    const wetCodes = [51,53,55,56,57,61,63,65,66,67,80,81,82];
+    let effHCode = rawHCode;
+    if (wetCodes.includes(rawHCode) && (hProb == null || hProb < 30) && (hPrecip == null || hPrecip < 0.1)) {
+      // Not enough chance AND no measurable rain -> it's not really wet, show sky instead.
+      effHCode = (hCloud != null && hCloud > 50) ? 3 : 2;
+    }
+    const hCode = weatherCodes[reconcileCondition(effHCode, hCloud, hPrecip)] || {emoji:'❓'};
+    const hourLabel = isNow ? 'Now' : t.toLocaleTimeString([], {hour:'numeric', hour12: true});
     const rainProb = weather.hourly.precipitation_probability[i];
+    // Only flag rain when the chance is actually meaningful (>=30%), so a 10% chance
+    // doesn't make it look like it's raining all day.
+    const showRain = rainProb != null && rainProb >= 30;
     hourHtml.push(`<div class="hour">
       <div class="hour-time">${hourLabel}</div>
       <div class="hour-icon">${hCode.emoji}</div>
       <div class="hour-temp">${showT(weather.hourly.temperature_2m[i])}°</div>
-      ${rainProb > 0 ? `<div class="hour-rain">💧${rainProb}%</div>` : '<div class="hour-rain">&nbsp;</div>'}
+      ${showRain ? `<div class="hour-rain">💧${rainProb}%</div>` : '<div class="hour-rain">&nbsp;</div>'}
     </div>`);
   }
   $('hourly').innerHTML = hourHtml.join('');
@@ -424,20 +673,33 @@ function render(loc, weather, air) {
     $('aqi-fill').style.width = Math.min(100, (aqi / 300) * 100) + '%';
     $('aqi-fill').style.background = level.color;
 
+    // Rough "normal vs high" thresholds (µg/m³) so a big-but-harmless number
+    // (like CO, which is naturally in the hundreds-to-thousands) isn't alarming.
     const pollutants = [
-      {name:'PM2.5', val:air.current.pm2_5, unit:'µg/m³'},
-      {name:'PM10', val:air.current.pm10, unit:'µg/m³'},
-      {name:'Ozone (O₃)', val:air.current.ozone, unit:'µg/m³'},
-      {name:'NO₂', val:air.current.nitrogen_dioxide, unit:'µg/m³'},
-      {name:'SO₂', val:air.current.sulphur_dioxide, unit:'µg/m³'},
-      {name:'CO', val:air.current.carbon_monoxide, unit:'µg/m³'}
+      {name:'Fine particles', formula:'PM2.5', val:air.current.pm2_5, unit:'µg/m³', ok:35, bad:75},
+      {name:'Coarse particles', formula:'PM10', val:air.current.pm10, unit:'µg/m³', ok:75, bad:150},
+      {name:'Ozone', formula:'O₃', val:air.current.ozone, unit:'µg/m³', ok:100, bad:180},
+      {name:'Nitrogen dioxide', formula:'NO₂', val:air.current.nitrogen_dioxide, unit:'µg/m³', ok:40, bad:100},
+      {name:'Sulfur dioxide', formula:'SO₂', val:air.current.sulphur_dioxide, unit:'µg/m³', ok:50, bad:150},
+      {name:'Carbon monoxide', formula:'CO', val:air.current.carbon_monoxide, unit:'µg/m³', ok:4000, bad:10000}
     ];
-    $('pollutants').innerHTML = pollutants.map(p =>
-      `<div class="poll">
-        <div class="poll-name">${p.name}</div>
-        <div class="poll-val">${p.val != null ? p.val.toFixed(1) : '—'} <span class="poll-unit">${p.unit}</span></div>
-      </div>`
-    ).join('');
+    const statusFor = p => {
+      if (p.val == null) return {color:'#888', label:'—'};
+      if (p.val <= p.ok)  return {color:'#2ecc71', label:'normal'};
+      if (p.val <= p.bad) return {color:'#f1c40f', label:'elevated'};
+      return {color:'#e74c3c', label:'high'};
+    };
+    $('pollutants').innerHTML = pollutants.map(p => {
+      const s = statusFor(p);
+      return `<div class="poll">
+        <div class="poll-name">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.color};margin-right:4px;"></span>
+          ${p.name} <span style="opacity:0.6;">(${p.formula})</span>
+        </div>
+        <div class="poll-val">${p.val != null ? p.val.toFixed(1) : '—'} <span class="poll-unit" title="micrograms per cubic meter — a mass concentration, not a count of particles">${p.unit}</span></div>
+        <div style="font-size:10px;opacity:0.7;margin-top:2px;color:${s.color};">${s.label}</div>
+      </div>`;
+    }).join('');
   }
 
   // 7-day forecast
@@ -445,7 +707,16 @@ function render(loc, weather, air) {
   $('forecast').innerHTML = weather.daily.time.map((dateStr, i) => {
     const d = new Date(dateStr);
     const dn = i === 0 ? 'Today' : dayNames[d.getDay()];
-    const dCode = weatherCodes[weather.daily.weather_code[i]] || {emoji:'❓'};
+    // Cross-check the day's rain icon against its total rainfall. A day labeled "rain"
+    // with basically no rainfall (<1mm over the whole day) gets a cloud icon instead.
+    const dayPrecip = weather.daily.precipitation_sum ? weather.daily.precipitation_sum[i] : null;
+    const rawDayCode = weather.daily.weather_code[i];
+    const rainCodes = [51,53,55,56,57,61,63,65,66,67,80,81,82];
+    let dayCode = rawDayCode;
+    if (rainCodes.includes(rawDayCode) && dayPrecip != null && dayPrecip < 1) {
+      dayCode = 2; // partly cloudy instead of fake rain
+    }
+    const dCode = weatherCodes[dayCode] || {emoji:'❓'};
     return `<div class="day">
       <div class="day-name">${dn}</div>
       <div class="day-icon">${dCode.emoji}</div>
@@ -453,6 +724,25 @@ function render(loc, weather, air) {
       <div class="day-lo">${showT(weather.daily.temperature_2m_min[i])}°</div>
     </div>`;
   }).join('');
+
+  // Per-point sample panel
+  const pts = currentData.points;
+  const toggleBtn = $('points-toggle');
+  if (avgMode === 'city' && pts && pts.length > 1) {
+    toggleBtn.style.display = 'inline-block';
+    $('points-grid').innerHTML = pts.map(p => {
+      const pc = weatherCodes[p.code] || {emoji:'❓'};
+      return `<div style="background:rgba(255,255,255,0.1);border-radius:10px;padding:8px;text-align:center;">
+        <div style="font-size:11px;opacity:0.8;">${p.label}</div>
+        <div style="font-size:18px;margin:3px 0;">${pc.emoji}</div>
+        <div style="font-size:14px;font-weight:500;">${p.temp != null ? showT(p.temp) + '°' : '—'}</div>
+        <div style="font-size:10px;opacity:0.7;">AQI ${p.aqi != null ? Math.round(p.aqi) : '—'}</div>
+      </div>`;
+    }).join('');
+  } else {
+    toggleBtn.style.display = 'none';
+    $('points-panel').classList.add('hidden');
+  }
 
   $('content').classList.remove('hidden');
   $('status').classList.add('hidden');
@@ -502,8 +792,8 @@ async function loadCity(query) {
   $('content').classList.add('hidden');
   try {
     const loc = await geocode(query);
-    const { w, a } = await getWeather(loc.latitude, loc.longitude);
-    render(loc, w, a);
+    const res = await getWeather(loc.latitude, loc.longitude);
+    render(loc, res.w, res.a, res);
   } catch (e) {
     $('status').textContent = e.message || 'Something went wrong';
     $('status').classList.add('error');
@@ -515,8 +805,8 @@ async function loadByCoords(loc) {
   $('status').classList.remove('hidden', 'error');
   $('content').classList.add('hidden');
   try {
-    const { w, a } = await getWeather(loc.latitude, loc.longitude);
-    render(loc, w, a);
+    const res = await getWeather(loc.latitude, loc.longitude);
+    render(loc, res.w, res.a, res);
   } catch (e) {
     $('status').textContent = e.message || 'Something went wrong';
     $('status').classList.add('error');
@@ -532,6 +822,23 @@ $('unit-btn').addEventListener('click', () => {
   useF = !useF;
   $('unit-btn').textContent = useF ? '°F' : '°C';
   if (currentData) render(currentData.loc, currentData.weather, currentData.air);
+});
+
+// Toggle between city-average (9-point grid) and center-only, then reload current location.
+$('mode-btn').addEventListener('click', () => {
+  avgMode = (avgMode === 'city') ? 'center' : 'city';
+  localStorage.setItem('weather_avg_mode', avgMode);
+  $('mode-btn').textContent = avgMode === 'city' ? '🌆 City avg' : '📌 Center';
+  if (currentData && currentData.loc) {
+    loadByCoords(currentData.loc);
+  }
+});
+
+// Expand/collapse the per-point sample readings.
+$('points-toggle').addEventListener('click', () => {
+  const panel = $('points-panel');
+  const hidden = panel.classList.toggle('hidden');
+  $('points-toggle').textContent = hidden ? '📍 Show sample points' : '📍 Hide sample points';
 });
 $('geo-btn').addEventListener('click', () => {
   if (!navigator.geolocation) {
@@ -552,12 +859,12 @@ $('geo-btn').addEventListener('click', () => {
         const d = await r.json();
         const loc = (d.results && d.results[0]) || { name:'My location', latitude, longitude, country:'' };
         loc.latitude = latitude; loc.longitude = longitude;
-        const { w, a } = await getWeather(latitude, longitude);
-        render(loc, w, a);
+        const res = await getWeather(latitude, longitude);
+        render(loc, res.w, res.a, res);
       } catch (e) {
         const loc = { name:'My location', latitude, longitude, country:'' };
-        const { w, a } = await getWeather(latitude, longitude);
-        render(loc, w, a);
+        const res = await getWeather(latitude, longitude);
+        render(loc, res.w, res.a, res);
       }
     },
     err => {
@@ -583,6 +890,90 @@ $('geo-btn').addEventListener('click', () => {
     }
   );
 });
+
+// Set mode button label to match saved preference
+$('mode-btn').textContent = avgMode === 'city' ? '🌆 City avg' : '📌 Center';
+
+// Generate the blocky voxel-world background — floating 3D cubes in Roblox-style colors.
+function buildVoxelWorld() {
+  const bg = $('voxel-bg');
+  if (!bg) return;
+  const palette = ['#e74c3c','#3498db','#2ecc71','#f1c40f','#9b59b6','#e67e22','#1abcde','#ff6b9d'];
+  const count = 18;
+  for (let i = 0; i < count; i++) {
+    const size = 30 + Math.random() * 60;
+    const color = palette[Math.floor(Math.random() * palette.length)];
+    const left = Math.random() * 100;
+    const dur = 14 + Math.random() * 16;
+    const delay = -Math.random() * dur;
+    const cube = document.createElement('div');
+    cube.className = 'voxel';
+    cube.style.cssText = `left:${left}%;width:${size}px;height:${size}px;--half:${size/2}px;` +
+      `animation-duration:${dur}s;animation-delay:${delay}s;`;
+    ['top','front','side'].forEach(f => {
+      const face = document.createElement('div');
+      face.className = 'face ' + f;
+      face.style.background = color;
+      cube.appendChild(face);
+    });
+    bg.appendChild(cube);
+  }
+}
+buildVoxelWorld();
+
+// Build three original blocky characters (my own designs, Roblox-style boxy look):
+// a hard-hat Builder, a sunglasses Cool Kid, and a glowing-eyed Shadow figure.
+function buildCharacters() {
+  const row = $('char-row');
+  if (!row) return;
+
+  // Each character: skin, shirt, pants colors + optional hat/accessory + eye style.
+  const chars = [
+    { // Builder — hard hat + hi-vis vest
+      skin:'#e8b98a', shirt:'#f5a623', pants:'#34495e', arm:'#e8b98a',
+      hat:{ top:'#f1c40f', brim:'#d4a30c' }, eyes:'#1a1a1a', glow:false, delay:0
+    },
+    { // Cool Kid — cap + sunglasses + hoodie
+      skin:'#d9a06b', shirt:'#2ecc71', pants:'#2c3e50', arm:'#d9a06b',
+      hat:{ top:'#e74c3c', brim:'#c0392b' }, eyes:'#111', glow:false, shades:true, delay:0.6
+    },
+    { // Shadow figure — all dark with glowing eyes
+      skin:'#2c2c34', shirt:'#1a1a22', pants:'#111', arm:'#2c2c34',
+      hat:null, eyes:'#00e6ff', glow:true, delay:1.2
+    }
+  ];
+
+  chars.forEach(ch => {
+    const el = document.createElement('div');
+    el.className = 'blocky';
+    el.style.animationDelay = ch.delay + 's';
+
+    const hat = ch.hat
+      ? `<div class="hat" style="background:${ch.hat.top}"></div><div class="brim" style="background:${ch.hat.brim}"></div>`
+      : '';
+
+    const eyeStyle = ch.glow ? `background:${ch.eyes};color:${ch.eyes};` : `background:${ch.eyes};`;
+    const eyeClass = ch.glow ? 'face-dot glow-eye' : 'face-dot';
+    const shades = ch.shades
+      ? `<div style="position:absolute;top:11px;left:6px;right:6px;height:7px;background:#111;border-radius:2px;"></div>`
+      : `<div class="${eyeClass} eye-l" style="${eyeStyle}"></div><div class="${eyeClass} eye-r" style="${eyeStyle}"></div>`;
+
+    el.innerHTML = `
+      ${hat}
+      <div class="head" style="background:${ch.skin}">${shades}</div>
+      <div class="arms">
+        <div class="arm" style="background:${ch.arm}"></div>
+        <div class="arm" style="background:${ch.arm}"></div>
+      </div>
+      <div class="torso" style="background:${ch.shirt}"></div>
+      <div class="legs">
+        <div class="leg" style="background:${ch.pants}"></div>
+        <div class="leg" style="background:${ch.pants}"></div>
+      </div>`;
+    row.appendChild(el);
+  });
+}
+buildCharacters();
 
 // Initial load: first favorite, or Gurugram
 if (favorites.length > 0) {
